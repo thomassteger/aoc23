@@ -3,73 +3,92 @@ package ch.platoon.aoc23;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class Day5 {
 
   public static void main(String[] args) throws IOException {
     List<String> lines = Files.readAllLines(Path.of("input/5.txt"));
 
-    List<List<Long>> currentMaps = new ArrayList<>();
-    Map<Long, Long> seedsMap = new HashMap<>();
-    for (Iterator<String> iterator = lines.iterator(); iterator.hasNext(); ) {
-      String line = iterator.next();
+    Map<String, List<Mapping>> mappingsMap = new TreeMap<>(Comparator.reverseOrder());
+    List<Mapping> currentMapping = new ArrayList<>();
+    String mappingName = null;
+
+    for (String line : lines) {
       if (line.startsWith("seeds:")) {
-        List<Long> seedRanges = Arrays.stream(line.substring(line.indexOf(':') + 1).split(" ")).filter(s -> !s.isBlank()).map(s -> Long.parseLong(s.trim())).toList();
-        for (int i = 0; i < seedRanges.size() - 1; i += 2) {
-          for (long j = seedRanges.get(i); j < seedRanges.get(i) + seedRanges.get(i + 1); j++) {
-            seedsMap.put(j, j);
-          }
+        mappingName = "seeds";
+        String[] split = line.substring("seeds: ".length()).split("\\s+");
+        for (int i = 0; i < split.length - 1; i += 2) {
+          currentMapping.add(new Mapping(split[i], split[i], split[i + 1]));
         }
+      } else if (line.isBlank()) {
+        currentMapping.sort(Comparator.comparing(Mapping::destinationFrom));
+        mappingsMap.put(mappingsMap.size() + ": " + mappingName, currentMapping);
+        currentMapping = new ArrayList<>();
+      } else if (!Character.isAlphabetic(line.codePointAt(0))) {
+        String[] split = line.split("\\s+");
+        currentMapping.add(new Mapping(split[0], split[1], split[2]));
+      } else {
+        mappingName = line;
+      }
+    }
+    currentMapping.sort(Comparator.comparing(Mapping::destinationFrom));
+    mappingsMap.put(mappingsMap.size() + ": " + mappingName, currentMapping);
 
-      } else if (!line.isBlank()) {
-        if (!Character.isDigit(line.charAt(0))) {
-          System.out.println(line);
-          if (!currentMaps.isEmpty()) {
-            map(currentMaps, seedsMap);
-          }
+    for (Map.Entry<String, List<Mapping>> mappingEntry : mappingsMap.entrySet()) {
+      System.out.println(mappingEntry.getKey());
+      for (Mapping mapping : mappingEntry.getValue()) {
+        System.out.println(mapping);
+      }
+    }
 
-          seedsMap.forEach((integer, integer2) -> System.out.println(integer + "->" + integer2));
-          currentMaps.clear();
-        } else {
-          currentMaps.add(Arrays.stream(line.split(" ")).filter(s -> !s.isBlank()).map(s -> Long.parseLong(s.trim())).collect(Collectors.toList()));
+    List<Map.Entry<String, List<Mapping>>> mappingList = new ArrayList<>(mappingsMap.entrySet());
+
+    Map.Entry<String, List<Mapping>> startMappings = mappingList.get(0);
+
+    for (Mapping startMapping : startMappings.getValue()) {
+      for (long l = startMapping.destinationFrom; l < startMapping.destinationTo; l++) {
+        Long source = findSource(mappingList, 1, l);
+        if (source != null) {
+          System.out.println(l + " -> " + source);
         }
       }
     }
 
+  }
 
-    map(currentMaps, seedsMap);
-    seedsMap.forEach((integer, integer2) -> System.out.println(integer + "->" + integer2));
-
-    long min = Long.MAX_VALUE;
-    for (Long value : seedsMap.values()) {
-      if(value < min) {
-        min = value;
+  private static Long findSource(List<Map.Entry<String, List<Mapping>>> mappingsList, int mappingListIndex, long destination) {
+    if (mappingListIndex == 7) {
+      System.out.println("destination = " + destination);
+      return destination;
+    }
+    List<Mapping> mappings = mappingsList.get(mappingListIndex).getValue();
+    for (Mapping mapping : mappings) {
+      if (mapping.isInRange(destination)) {
+        return findSource(mappingsList, mappingListIndex + 1, mapping.sourceFrom + (destination - mapping.destinationFrom));
       }
-    }
-    System.out.println(min);
 
+    }
+    if (mappingListIndex < 7) {
+      return findSource(mappingsList, mappingListIndex + 1, destination);
+    }
+    return null;
   }
 
-  private static void map(List<List<Long>> currentMaps, Map<Long, Long> seedsMap) {
-    for (Map.Entry<Long, Long> seedTargetEntry : seedsMap.entrySet()) {
-      finMapping(currentMaps, seedTargetEntry);
+  record Mapping(long destinationFrom, long destinationTo, long sourceFrom, long sourceTo) {
+    public Mapping(String dest, String source, String length) {
+      this(Long.parseLong(dest), Long.parseLong(dest) + Long.parseLong(length), Long.parseLong(source), Long.parseLong(source) + Long.parseLong(length));
+    }
+
+    boolean isInRange(long destination) {
+      return destination >= destinationFrom && destination < destinationTo;
     }
   }
 
-  private static void finMapping(List<List<Long>> currentMaps, Map.Entry<Long, Long> seedTargetEntry) {
-    for (List<Long> currentMap : currentMaps) {
-      System.out.print(seedTargetEntry.getValue() + " > " + currentMap.get(1) + " && " + seedTargetEntry.getValue() + " <= " + currentMap.get(1) + " + " + currentMap.get(2)  );
-      if(seedTargetEntry.getValue() >= currentMap.get(1) && seedTargetEntry.getValue() <= currentMap.get(1) +currentMap.get(2)) {
-        long target = currentMap.get(0) + seedTargetEntry.getValue() - currentMap.get(1);
-        seedTargetEntry.setValue(target);
-        System.out.print("   ok");
-        System.out.println();
-        return;
-      }
-    }
-  }
+  ;
 
 }
